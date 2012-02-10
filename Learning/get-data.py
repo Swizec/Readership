@@ -55,6 +55,9 @@ def sentences(entry):
 
 def cleanup(data):
     def cleaned(entry):
+        entry.counts = {'h2': entry.content[0].value.count("<h2>"),
+                        'p': entry.content[0].value.count("\n\n")-entry.content[0].value.count("</h2>\n\n")}
+
         entry.content[0].value = ''.join(BeautifulSoup(entry.content[0].value).findAll(text=True))
         return entry
     data.entries = map(cleaned, data.entries)
@@ -108,7 +111,8 @@ def flesch_kincaid(entry):
          )
 
 
-if __name__ == "__main__":
+
+"""if __name__ == "__main__":
     data = feedparser.parse('ageekwithahat.wordpress.2011-09-28.xml')
     data = cleanup(data)
 
@@ -134,3 +138,10 @@ if __name__ == "__main__":
 
     out.write("];");
     out.close()
+"""
+
+if __name__ == "__main__":
+    data = feedparser.parse(sys.argv[1])
+    data = cleanup(data)
+
+    print [entry.counts for entry in data.entries]
