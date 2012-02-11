@@ -10,6 +10,7 @@ from itertools import groupby
 import json, time, collections, sys
 from mixpanel import Mixpanel
 from secrets import MIXPANEL
+from datetime import datetime
 
 import functools
 import cPickle
@@ -146,18 +147,29 @@ if __name__ == "__main__":
     data = feedparser.parse(sys.argv[1])
     data = cleanup(data)
 
-    print MIXPANEL
-
     mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
 
     for entry in data.entries:
 #        print entry.wp_post_date_gmt.split(' ')[0]
 #        print entry.link
-        print mx.request(['funnels'],
-                         {'funnel_id': 6517,
-                          'from_date': entry.wp_post_date_gmt.split(' ')[0],
-                          'where': 'url=='+entry.link})
-        break
+        try:
+            date = datetime.strptime(entry.wp_post_date_gmt,
+                                     '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            continue
+
+        funnel = mx.request(['funnels'],
+                            {'funnel_id': 6517,
+                             'from_date': date.strftime('%Y-%m-%d'),
+                             'where': 'url=='+entry.link})
+        if 'error' in funnel.keys():
+            print funnel
+        merged = {'completion': 0, 'starting_amount': 0, u'steps': 0, u'worst': 0}
+        for k in funnel['data'].keys():
+            for kk in funnel['data'][k]['analysis'].keys():
+                merged[kk] += funnel['data'][k]['analysis'][kk]
+        merged['steps'] = merged['steps']/len(funnel['data'])
+        print merged
 
 #    print mx.request(['funnels'],
 #                     {'funnel_id': 6517,
