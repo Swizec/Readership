@@ -8,6 +8,8 @@ from nltk.stem.porter import PorterStemmer
 import nltk.data
 from itertools import groupby
 import json, time, collections, sys
+from mixpanel import Mixpanel
+from secrets import MIXPANEL
 
 import functools
 import cPickle
@@ -144,4 +146,19 @@ if __name__ == "__main__":
     data = feedparser.parse(sys.argv[1])
     data = cleanup(data)
 
-    print [entry.counts for entry in data.entries]
+    print MIXPANEL
+
+    mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
+
+    for entry in data.entries:
+#        print entry.wp_post_date_gmt.split(' ')[0]
+#        print entry.link
+        print mx.request(['funnels'],
+                         {'funnel_id': 6517,
+                          'from_date': entry.wp_post_date_gmt.split(' ')[0],
+                          'where': 'url=='+entry.link})
+        break
+
+#    print mx.request(['funnels'],
+#                     {'funnel_id': 6517,
+#                      })
