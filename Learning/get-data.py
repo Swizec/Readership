@@ -143,34 +143,41 @@ def flesch_kincaid(entry):
     out.close()
 """
 
+mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
+
+def process_entry(entry):
+    try:
+        date = datetime.strptime(entry.wp_post_date_gmt,
+                                 '%Y-%m-%d %H:%M:%S')
+    except ValueError:
+        return False
+
+    funnel = mx.request(['funnels'],
+                        {'funnel_id': 6517,
+                         'from_date': date.strftime('%Y-%m-%d'),
+                         'where': 'url=='+entry.link})
+
+    if 'error' in funnel.keys():
+        print funnel
+        return False
+
+    def stitch(*iterables):
+        return [(iterables[0][i][0], sum([l[i][1] for l in iterables]))
+                for i in xrange(len(iterables[0]))]
+
+    def one(z):
+        d = dict(stitch(*[[b for b in zip(a.keys(), a.values()) if b[0] in ['count', 'step_conv_ratio', 'overall_conv_ratio']] for a in z]))
+
+        d['overall_conv_ratio'] = d['overall_conv_ratio']/len(funnel['meta']['dates'])
+        d['step_conv_ratio'] = d['step_conv_ratio']/len(funnel['meta']['dates'])
+        return d
+
+    print map(one,
+              zip(*[v['steps'][:entry['counts']['p']] for v in funnel['data'].values()]))
+
 if __name__ == "__main__":
     data = feedparser.parse(sys.argv[1])
     data = cleanup(data)
 
-    mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
-
-    for entry in data.entries:
-#        print entry.wp_post_date_gmt.split(' ')[0]
-#        print entry.link
-        try:
-            date = datetime.strptime(entry.wp_post_date_gmt,
-                                     '%Y-%m-%d %H:%M:%S')
-        except ValueError:
-            continue
-
-        funnel = mx.request(['funnels'],
-                            {'funnel_id': 6517,
-                             'from_date': date.strftime('%Y-%m-%d'),
-                             'where': 'url=='+entry.link})
-        if 'error' in funnel.keys():
-            print funnel
-        merged = {'completion': 0, 'starting_amount': 0, u'steps': 0, u'worst': 0}
-        for k in funnel['data'].keys():
-            for kk in funnel['data'][k]['analysis'].keys():
-                merged[kk] += funnel['data'][k]['analysis'][kk]
-        merged['steps'] = merged['steps']/len(funnel['data'])
-        print merged
-
-#    print mx.request(['funnels'],
-#                     {'funnel_id': 6517,
-#                      })
+    print process_entry(data.entries[-1])
+   # map(process_entry, data.entries)
