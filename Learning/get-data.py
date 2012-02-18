@@ -59,7 +59,8 @@ def sentences(entry):
 def cleanup(data):
     def cleaned(entry):
         entry.counts = {'h2': entry.content[0].value.count("<h2>"),
-                        'p': entry.content[0].value.count("\n\n")-entry.content[0].value.count("</h2>\n\n")}
+                        'p': entry.content[0].value.count("\n\n")-entry.content[0].value.count("</h2>\n\n"),
+                        'img': entry.content[0].value.count('<img')}
 
         entry.content[0].value = ''.join(BeautifulSoup(entry.content[0].value).findAll(text=True))
         return entry
@@ -70,23 +71,23 @@ def word_length(entry):
     @memoize
     def average():
         return sum([len(syllables(w)) for w in words(entry)])\
-                   /len(words(entry))
+                   /float(len(words(entry)))
     def deviation():
         return math.sqrt(sum([(len(syllables(w))-average())**2 for w in words(entry)])\
                              /float(len(words(entry))))
 
-    return (average(), deviation())
+    return (round(average(), 2), round(deviation(), 2))
 
 def sentence_length(entry):
     @memoize
     def average():
-        return sum([len(words(s)) for s in sentences(entry)])\
-                   /len(sentences(entry))
+        return sum([len(words(s))*1.0 for s in sentences(entry)])\
+                   /float(len(sentences(entry)))
     def deviation():
         return math.sqrt(sum([(len(words(s))-average())**2 for s in sentences(entry)])\
                              /float(len(sentences(entry))))
 
-    return (average(), deviation())
+    return (round(average(), 2), round(deviation(), 2))
 
 def yule(entry):
     # yule's I measure (the inverse of yule's K measure)
@@ -98,7 +99,7 @@ def yule(entry):
     M2 = sum([len(list(g))*(freq**2) for freq,g in groupby(sorted(d.values()))])
 
     try:
-        return (M1*M1)/(M2-M1)
+        return round((M1*M1)/(M2-M1), 2)
     except ZeroDivisionError:
         return 0
 
@@ -107,11 +108,12 @@ def flesch_kincaid(entry):
     def syllable_count():
         return sum([len(syllables(w)) for w in words(entry)])
 
-    return 206.835-1.015*(
-           len(words(entry))/float(len(sentences(entry)))
-        )-84.6*(
-             syllable_count()/float(len(words(entry)))
-         )
+    return round(206.835-1.015*(
+                                  len(words(entry))/float(len(sentences(entry)))
+                              )-84.6*(
+                                  syllable_count()/float(len(words(entry)))
+                              ),
+                 2)
 
 
 
@@ -174,6 +176,15 @@ def process_entry(entry):
 
     print map(one,
               zip(*[v['steps'][:entry['counts']['p']] for v in funnel['data'].values()]))
+    print entry['counts']
+    print {'flesch_kincaid': flesch_kincaid(entry),
+           'yule': yule(entry),
+           'word_len': word_length(entry),
+           'sentence_len': sentence_length(entry),
+           'date': time.strftime('%Y-%m-%d', entry.updated_parsed),
+           'time': time.strftime('%H:%m', entry.updated_parsed),
+           'words': len(words(entry)),
+           'sentences': len(sentences(entry))}
 
 if __name__ == "__main__":
     data = feedparser.parse(sys.argv[1])
