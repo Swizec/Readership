@@ -41,20 +41,34 @@ def syllables(word):
 
 @memoize
 def words(entry):
-    if type(entry) == unicode:
+    if type(entry) == unicode or type(entry) == str:
         words = entry.split()
     else:
         words = entry.content[0].value.split()
 
     return filter(lambda w: len(w) > 0,
                   [w.strip("0123456789!:,.?(){}[]") for w in words])
-#    return word_tokenize(entry.content[0].value)
-#    return entry.content[0].value.split(" ")
 
 @memoize
 def sentences(entry):
     sent_detector = nltk.data.load('tokenizers/punkt/english.pickle')
-    return sent_detector.tokenize(entry.content[0].value)
+    if type(entry) == unicode or type(entry) == str:
+        return sent_detector.tokenize(entry)
+    else:
+        return sent_detector.tokenize(entry.content[0].value)
+
+@memoize
+def paragraphs(entry):
+    if type(entry) == unicode or type(entry) == str:
+        ps = entry.split('\n\n')
+    else:
+        ps = entry.content[0].raw.split('\n\n')
+
+    def pretty(p):
+        p = u'' if p.startswith('[') else p # image captions
+        return ''.join(BeautifulSoup(p).findAll(text=True))
+    return [pretty(p)
+            for p in ps if '<h2>' not in p]
 
 def cleanup(data):
     def cleaned(entry):
@@ -62,6 +76,7 @@ def cleanup(data):
                         'p': entry.content[0].value.count("\n\n")-entry.content[0].value.count("</h2>\n\n"),
                         'img': entry.content[0].value.count('<img')}
 
+        entry.content[0].raw = entry.content[0].value
         entry.content[0].value = ''.join(BeautifulSoup(entry.content[0].value).findAll(text=True))
         return entry
     data.entries = map(cleaned, data.entries)
@@ -86,6 +101,19 @@ def sentence_length(entry):
     def deviation():
         return math.sqrt(sum([(len(words(s))-average())**2 for s in sentences(entry)])\
                              /float(len(sentences(entry))))
+
+    return (round(average(), 2), round(deviation(), 2))
+
+def paragraph_length(entry):
+    @memoize
+    def average():
+        return sum([len(sentences(p))*1.0 for p in paragraphs(entry)])\
+                   /float(len(paragraphs(entry)))
+
+    def deviation():
+        return math.sqrt(sum([(len(sentences(p))-average())**2
+                              for p in paragraphs(entry)])\
+                             /float(len(paragraphs(entry))))
 
     return (round(average(), 2), round(deviation(), 2))
 
@@ -115,35 +143,6 @@ def flesch_kincaid(entry):
                               ),
                  2)
 
-
-
-"""if __name__ == "__main__":
-    data = feedparser.parse('ageekwithahat.wordpress.2011-09-28.xml')
-    data = cleanup(data)
-
-    out = open('./blog-analysis.js', 'w')
-
-    out.write("analysis_data = [");
-
-    def line(entry):
-        if len(words(entry)) == 0:
-            return None
-
-        o = json.dumps({'flesch_kincaid': flesch_kincaid(entry),
-                        'yule': yule(entry),
-                        'word_len': word_length(entry),
-                        'sentence_len': sentence_length(entry),
-                        'date': time.strftime('%Y-%m-%d', entry.updated_parsed),
-                        'words': len(words(entry)),
-                        'sentences': len(sentences(entry))})
-        out.write(o+",\n")
-        print o
-
-    map(line, data.entries)
-
-    out.write("];");
-    out.close()
-"""
 
 mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
 
@@ -193,7 +192,8 @@ def extract_data(entry):
     data['complexity'].update({'flesch_kincaid': flesch_kincaid(entry),
                                'yule': yule(entry),
                                'word_len': word_length(entry),
-                               'sentence_len': sentence_length(entry)})
+                               'sentence_len': sentence_length(entry),
+                               'paragraph_len': paragraph_length(entry)})
     data['length'].update({'words': len(words(entry)),
                            'sentences': len(sentences(entry)),
                            'paragraphs': entry['counts']['p']})
