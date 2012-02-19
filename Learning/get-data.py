@@ -11,6 +11,7 @@ import json, time, collections, sys
 from mixpanel import Mixpanel
 from secrets import MIXPANEL
 from datetime import datetime
+from pymongo import Connection
 
 import functools
 import cPickle
@@ -200,11 +201,26 @@ def extract_data(entry):
     data['style'].update(entry['counts'])
     data['readership'] = conversions(entry)
 
-    print data
+    return data
 
 if __name__ == "__main__":
     data = feedparser.parse(sys.argv[1])
     data = cleanup(data)
 
-    print extract_data(data.entries[-1])
-   # map(process_entry, data.entries)
+    db = Connection().readership_data
+    posts = db.posts
+    readership = db.readership
+
+    for entry in reversed(data.entries):
+        post = posts.insert({'title': entry.title,
+                             'content': entry.content[0]['raw'],
+                             'href': entry.links[0]['href'],
+                             'time': datetime.strptime(entry.wp_post_date_gmt,
+                                                       '%Y-%m-%d %H:%M:%S')})
+        d = extract_data(entry)
+        d['post'] = post
+        readership.insert(d)
+
+        print datetime.strptime(entry.wp_post_date_gmt,
+                                '%Y-%m-%d %H:%M:%S')
+        break
