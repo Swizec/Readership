@@ -137,15 +137,12 @@ def flesch_kincaid(entry):
     def syllable_count():
         return sum([len(syllables(w)) for w in words(entry)])
 
-    try:
-        return round(206.835-1.015*(
-                               len(words(entry))/float(len(sentences(entry)))
-                               )-84.6*(
-                                   syllable_count()/float(len(words(entry)))
-                               ),
-                     2)
-    except ZeroDivisionError:
-        return 0
+    return round(206.835-1.015*(
+                            len(words(entry))/float(len(sentences(entry)))
+                      )-84.6*(
+                            syllable_count()/float(len(words(entry)))
+                      ),
+                 2)
 
 
 mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
@@ -193,6 +190,11 @@ def extract_data(entry):
             'length': {},
             'style': {},
             'readership': {}}
+
+    if not all([len(words(entry)),
+                len(sentences(entry)),
+                len(paragraphs(entry))]):
+        raise NoConversions()
 
     data['complexity'].update({'flesch_kincaid': flesch_kincaid(entry),
                                'yule': yule(entry),
