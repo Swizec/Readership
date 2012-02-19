@@ -223,4 +223,3 @@ if __name__ == "__main__":
 
         print datetime.strptime(entry.wp_post_date_gmt,
                                 '%Y-%m-%d %H:%M:%S')
-        break
