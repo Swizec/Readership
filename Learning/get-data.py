@@ -147,7 +147,7 @@ def flesch_kincaid(entry):
 
 mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
 
-def process_entry(entry):
+def conversions(entry):
     try:
         date = datetime.strptime(entry.wp_post_date_gmt,
                                  '%Y-%m-%d %H:%M:%S')
@@ -174,21 +174,37 @@ def process_entry(entry):
         d['step_conv_ratio'] = d['step_conv_ratio']/len(funnel['meta']['dates'])
         return d
 
-    print map(one,
-              zip(*[v['steps'][:entry['counts']['p']] for v in funnel['data'].values()]))
-    print entry['counts']
-    print {'flesch_kincaid': flesch_kincaid(entry),
-           'yule': yule(entry),
-           'word_len': word_length(entry),
-           'sentence_len': sentence_length(entry),
-           'date': time.strftime('%Y-%m-%d', entry.updated_parsed),
-           'time': time.strftime('%H:%m', entry.updated_parsed),
-           'words': len(words(entry)),
-           'sentences': len(sentences(entry))}
+    conversions =  map(one,
+                       zip(*[v['steps'][:entry['counts']['p']] for v in funnel['data'].values()]))
+
+    def average(c):
+        return sum([(i+1)*c[i]['overall_conv_ratio']
+                    for i in xrange(len(c))])/float(len(c))
+
+    return {'average': round(average(conversions), 2),
+            'finishes': round(conversions[-1]['overall_conv_ratio'], 2)}
+
+def extract_data(entry):
+    data = {'complexity': {},
+            'length': {},
+            'style': {},
+            'readership': {}}
+
+    data['complexity'].update({'flesch_kincaid': flesch_kincaid(entry),
+                               'yule': yule(entry),
+                               'word_len': word_length(entry),
+                               'sentence_len': sentence_length(entry)})
+    data['length'].update({'words': len(words(entry)),
+                           'sentences': len(sentences(entry)),
+                           'paragraphs': entry['counts']['p']})
+    data['style'].update(entry['counts'])
+    data['readership'] = conversions(entry)
+
+    print data
 
 if __name__ == "__main__":
     data = feedparser.parse(sys.argv[1])
     data = cleanup(data)
 
-    print process_entry(data.entries[-1])
+    print extract_data(data.entries[-1])
    # map(process_entry, data.entries)
