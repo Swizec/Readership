@@ -137,12 +137,15 @@ def flesch_kincaid(entry):
     def syllable_count():
         return sum([len(syllables(w)) for w in words(entry)])
 
-    return round(206.835-1.015*(
-                                  len(words(entry))/float(len(sentences(entry)))
-                              )-84.6*(
-                                  syllable_count()/float(len(words(entry)))
-                              ),
-                 2)
+    try:
+        return round(206.835-1.015*(
+                               len(words(entry))/float(len(sentences(entry)))
+                               )-84.6*(
+                                   syllable_count()/float(len(words(entry)))
+                               ),
+                     2)
+    except ZeroDivisionError:
+        return 0
 
 
 mx = Mixpanel(MIXPANEL['api_key'], MIXPANEL['api_secret'])
@@ -152,7 +155,7 @@ def conversions(entry):
         date = datetime.strptime(entry.wp_post_date_gmt,
                                  '%Y-%m-%d %H:%M:%S')
     except ValueError:
-        return False
+        raise NoConversions()
 
     funnel = mx.request(['funnels'],
                         {'funnel_id': 6517,
@@ -161,7 +164,7 @@ def conversions(entry):
 
     if 'error' in funnel.keys():
         print funnel
-        return False
+        raise NoConversions()
 
     def stitch(*iterables):
         return [(iterables[0][i][0], sum([l[i][1] for l in iterables]))
@@ -175,7 +178,8 @@ def conversions(entry):
         return d
 
     conversions =  map(one,
-                       zip(*[v['steps'][:entry['counts']['p']] for v in funnel['data'].values()]))
+                       zip(*[v['steps'][:entry['counts']['p']]
+                             for v in funnel['data'].values()]))
 
     def average(c):
         return sum([(i+1)*c[i]['overall_conv_ratio']
@@ -203,6 +207,9 @@ def extract_data(entry):
 
     return data
 
+class NoConversions(Exception):
+    pass
+
 if __name__ == "__main__":
     data = feedparser.parse(sys.argv[1])
     data = cleanup(data)
@@ -212,12 +219,16 @@ if __name__ == "__main__":
     readership = db.readership
 
     for entry in reversed(data.entries):
+        try:
+            d = extract_data(entry)
+        except NoConversions:
+            continue
+
         post = posts.insert({'title': entry.title,
                              'content': entry.content[0]['raw'],
                              'href': entry.links[0]['href'],
                              'time': datetime.strptime(entry.wp_post_date_gmt,
                                                        '%Y-%m-%d %H:%M:%S')})
-        d = extract_data(entry)
         d['post'] = post
         readership.insert(d)
 
