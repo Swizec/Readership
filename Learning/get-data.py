@@ -232,6 +232,8 @@ if __name__ == "__main__":
                              'time': datetime.strptime(entry.wp_post_date_gmt,
                                                        '%Y-%m-%d %H:%M:%S')})
         d['post'] = post
+        d['date'] = datetime.strptime(entry.wp_post_date_gmt,
+                                      '%Y-%m-%d %H:%M:%S')
         readership.insert(d)
 
         print datetime.strptime(entry.wp_post_date_gmt,
